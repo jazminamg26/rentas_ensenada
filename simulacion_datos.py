@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import random
 import unicodedata
+from datetime import datetime, timedelta
 
 num_arrendatarios = 85
 
@@ -61,6 +62,19 @@ def generar_arrendatarios(n=10):
 
 arrendatarios_df = generar_arrendatarios(n=num_arrendatarios)
 print(arrendatarios_df)
+
+
+# Generar columna 'activo' con 90% True
+arrendatarios_df['activo'] = np.random.choice([True, False], size=len(arrendatarios_df), p=[0.9, 0.1])
+
+# Reordenar columnas
+arrendatarios_df = arrendatarios_df[['id', 'nombre', 'telefono', 'correo', 'activo']]
+
+# Verificar
+print(arrendatarios_df.head())
+
+arrendatarios_df.to_csv("arrendatarios.csv",index=False)
+
 
 # Simulación de las rentas inmuebles -------------------------------------
 # Cargar el CSV original
@@ -141,44 +155,119 @@ vivi_limpia_renta.columns = [col.lower() for col in vivi_limpia_renta.columns]
 renta = vivi_limpia_renta.copy()
 
 
+renta.to_csv("rentas.csv",index=False)
 
+# Simulación de renta_muebles ----------------------------------------
 
-
-import pandas as pd
-import numpy as np
-import random
 
 # Cargar catálogo de muebles
 catalogo_muebles = pd.read_csv("catalogo_muebles.csv")
 
-# Supongamos que ya tienes tu DataFrame 'renta' con columna 'id'
-# Por ejemplo: renta = pd.read_csv("renta.csv")
-
-# Lista para guardar filas de renta_muebles
+# Lista para guardar filas correctas
 filas = []
 
-# Para cada renta_id en renta
 for renta_id in renta['id']:
-    # Elegir aleatoriamente cuántos muebles tendrá esta renta (0 a número total de muebles)
+    # Elegir aleatoriamente cuántos muebles tendrá esta renta (0 a total de muebles)
     num_muebles = random.randint(0, len(catalogo_muebles))
     
-    # Si tiene muebles
     if num_muebles > 0:
-        # Elegir muebles aleatoriamente sin repetición
         muebles_seleccionados = random.sample(list(catalogo_muebles['id']), k=num_muebles)
-        
-        # Agregar filas
         for mueble_id in muebles_seleccionados:
             filas.append({
                 'renta_id': renta_id,
-                'renta_mueble': mueble_id
+                'mueble_id': mueble_id
             })
 
 # Crear DataFrame
 renta_muebles = pd.DataFrame(filas)
 
-# Crear columna 'id' como índice
+# Eliminar filas con NaN (aunque no debería haber)
+renta_muebles = renta_muebles.dropna(subset=['renta_id', 'mueble_id'])
+
+# Crear columna 'id' como índice incremental
 renta_muebles.insert(0, 'id', range(1, len(renta_muebles) + 1))
 
-# Ver ejemplo
+# Verificar columnas y primeras filas
 print(renta_muebles.head())
+print(renta_muebles.columns)
+
+renta_muebles.to_csv("renta_muebles.csv",index=False)
+
+
+# Simulación de renta_servicios ----------------------------------------
+
+# Cargar catálogo de servicios
+catalogo_servicios = pd.read_csv("catalogo_servicios.csv")
+
+# Lista para guardar filas correctas
+filas_servicios = []
+
+for renta_id in renta['id']:
+    # Elegir aleatoriamente cuántos servicios tendrá esta renta (0 a total de servicios)
+    num_servicios = random.randint(0, len(catalogo_servicios))
+    
+    if num_servicios > 0:
+        servicios_seleccionados = random.sample(list(catalogo_servicios['id']), k=num_servicios)
+        for servicio_id in servicios_seleccionados:
+            filas_servicios.append({
+                'renta_id': renta_id,
+                'servicio_id': servicio_id
+            })
+
+# Crear DataFrame
+renta_servicios = pd.DataFrame(filas_servicios)
+
+# Eliminar filas con NaN (por precaución)
+renta_servicios = renta_servicios.dropna(subset=['renta_id', 'servicio_id'])
+
+# Crear columna 'id' como índice incremental
+renta_servicios.insert(0, 'id', range(1, len(renta_servicios) + 1))
+
+# Verificar columnas y primeras filas
+print(renta_servicios.head())
+print(renta_servicios.columns)
+renta_servicios['servicio_id'] = renta_servicios['servicio_id'].astype(int)
+renta_servicios.to_csv("renta_servicios.csv",index=False)
+
+# Simulación del historial----------------------------------------------
+renta_ids = renta['id'].tolist()
+
+historial_filas = []
+
+# Rango de precios base
+precio_min = 5000
+precio_max = 25000
+
+for renta_id in renta_ids:
+    num_periodos = random.randint(1, 3)
+    fecha_actual = datetime.today()
+    inicio_primera_renta = fecha_actual - timedelta(days=random.randint(30, 3*365))
+    
+    # Primer precio aleatorio para esta renta_id
+    precio_anterior = random.randint(precio_min, precio_max)
+    
+    for _ in range(num_periodos):
+        duracion = timedelta(days=random.randint(60, 180))
+        fecha_inicio = inicio_primera_renta
+        fecha_fin = fecha_inicio + duracion
+        
+        # Precio del siguiente periodo: máximo +/-30% respecto al anterior
+        variacion = random.uniform(-0.3, 0.3)
+        precio = int(precio_anterior * (1 + variacion))
+        precio_anterior = precio  # actualizar precio anterior
+        
+        historial_filas.append({
+            'renta_id': renta_id,
+            'fecha_inicio': fecha_inicio.date(),
+            'fecha_fin': fecha_fin.date(),
+            'precio': precio
+        })
+        
+        inicio_primera_renta = fecha_fin + timedelta(days=1)
+
+# Crear DataFrame
+historial_renta = pd.DataFrame(historial_filas)
+historial_renta.insert(0, 'id', range(1, len(historial_renta)+1))
+
+# Revisar resultado
+print(historial_renta.head(20))
