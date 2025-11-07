@@ -1,6 +1,8 @@
 # models.py
 from typing import Optional
-from sqlmodel import SQLModel, Field
+# models.py
+from typing import Optional, List
+from sqlmodel import SQLModel, Field, Relationship  # <-- ¡Asegúrate de que sea 'Relationship'!
 from datetime import date
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timedelta, timezone
@@ -22,7 +24,7 @@ class User(SQLModel, table=True):
     
     # Relación Uno-a-Uno con Arrendatario
     # Un usuario puede ser un arrendatario
-    arrendatario: Optional["Arrendatario"] = relationship(back_populates="user")
+    arrendatario: Optional["Arrendatario"] = Relationship(back_populates="user")
 
 # ----------------------------
 # Arrendatario
@@ -47,11 +49,11 @@ class Arrendatario(SQLModel, table=True): # Renombrado de 'User' a 'Arrendatario
     )
     
     # Relación de vuelta al User
-    user: Optional[User] = relationship(back_populates="arrendatario")
+    user: Optional[User] = Relationship(back_populates="arrendatario")
 
     # Relación Uno-a-Muchos con Renta
     # Un arrendatario puede tener muchas rentas
-    rentas: List["Renta"] = relationship(back_populates="arrendatario_rel")
+    rentas: List["Renta"] = Relationship(back_populates="arrendatario_rel")
 
 # ----------------------------
 # Catalogo de muebles
@@ -92,7 +94,7 @@ class Renta(SQLModel, table=True):
     arrendatario_id: int = Field(foreign_key="arrendatario.id")
     
     # Relación de vuelta al Arrendatario
-    arrendatario_rel: Optional[Arrendatario] = relationship(back_populates="rentas")
+    arrendatario_rel: Optional[Arrendatario] = Relationship(back_populates="rentas")
 
 # ----------------------------
 # Historial de renta
