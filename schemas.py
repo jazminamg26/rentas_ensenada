@@ -19,6 +19,7 @@ class RentaCreate(BaseModel):
     arrendatario_id: int
 
 
+
 class RentaInmueble(BaseModel):
     id: int
     edificio: str
@@ -46,6 +47,14 @@ class ArrendatarioInfo(BaseModel):
     class Config:
         from_attributes = True
 
+class ArrendatarioBase(BaseModel):
+    nombre: str
+    telefono: str
+    correo: Optional[str] = None
+    activo: bool = True
+
+class ArrendatarioCreate(ArrendatarioBase):
+    pass
 
 class RentaDetalle(RentaInmueble):
     arrendatario: ArrendatarioInfo
@@ -110,22 +119,23 @@ class ArrendatarioUpdate(BaseModel):
 class UserBase(BaseModel):
     username: str
     role: str
+    active : bool 
+
+class UserSchema(UserBase):
+    id: int
+   
 
 class UserCreate(BaseModel):
     username: str
     password: str 
     role: str 
 
-class UserSchema(UserBase):
-    id: int
-    active: bool 
-    model_config = ConfigDict(from_attributes=True)
 
-class UserUpdate(BaseModel): # <-- ADD THIS ENTIRE CLASS
-    username: Optional[str] = None
-    password: Optional[str] = None # Set new password
-    role: Optional[str] = None
-    active: Optional[bool] = None
+#class UserUpdate(BaseModel): # <-- ADD THIS ENTIRE CLASS
+#    username: Optional[str] = None
+#    password: Optional[str] = None # Set new password
+#    role: Optional[str] = None
+#    active: Optional[bool] = None
 
 class Token(BaseModel):
     access_token: str
@@ -133,3 +143,24 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+
+class ArrendatarioConUserCreate(BaseModel):
+    user_data: UserCreate
+    arrendatario_data: ArrendatarioCreate
+
+
+class RentaCreate(BaseModel):
+    # ¡YA NO SE INCLUYE arrendatario_id!
+    # Se inferirá del usuario logueado.
+    edificio: str
+    habitaciones: int
+    banos: float
+    lat: float
+    lon: float
+    mascotas: bool
+    tinaco: bool
+    estacionamiento: int
+    activo: bool = True
+    disponible: bool = True
+    precio: int

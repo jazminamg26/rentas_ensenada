@@ -8,11 +8,11 @@ from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from typing import List, Optional, Annotated
-
+from database import create_db_and_tables
 
 # Importar tus módulos locales
 from database import get_session
-from models import User, Renta, Arrendatario, HistorialRenta
+from models import User, Renta, HistorialRenta
 from schemas import (
     RentaCreate,
     RentaInmueble,
@@ -28,12 +28,14 @@ from schemas import (
 
 from schemas import (
     UserBase,
-    UserCreate,
+  #  UserCreate,
     UserSchema,
-    UserUpdate,
+ #   UserUpdate,
     Token,
     TokenData
 )
+
+from schemas import ArrendatarioConUserCreate
 
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM = "HS256"
@@ -118,60 +120,69 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: Ses
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 # --- Role-Based Dependencies ---
-def get_current_regular_user(current_user: CurrentUser) -> User:
-    """
-    Ensures the user has at least 'regular' privileges.
-    (All logged-in users are at least 'regular').
-    """
-    return current_user
-
-def get_current_owner(current_user: CurrentUser) -> User:
-    """Ensures the user is an 'owner'."""
-    if current_user.role != "owner":
+def get_current_arrendatario(current_user: CurrentUser) -> User:
+    """Asegura que el usuario es un 'arrendatario'."""
+    if current_user.role != "arrendatario":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to perform this action. Owner role required."
+            detail="Se requiere rol de Arrendatario."
         )
     return current_user
 
 def get_current_super_user(current_user: CurrentUser) -> User:
-    """Ensures the user is a 'super_user'."""
+    """Asegura que el usuario es un 'super_user'."""
     if current_user.role != "super_user":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to perform this action. Super User role required."
+            detail="Se requiere rol de Super Usuario."
         )
     return current_user
 
 # Type aliases for endpoint security
-RegularUser = Annotated[User, Depends(get_current_regular_user)]
-OwnerUser = Annotated[User, Depends(get_current_owner)]
+ArrendatarioUser = Annotated[User, Depends(get_current_arrendatario)]
 SuperUser = Annotated[User, Depends(get_current_super_user)]
 
 app = FastAPI()
 
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
+
+
+
 
 # -------------------------------------------------------
-# 1️⃣ POST /rentas — Crear renta
+# 1️⃣ POST /rentas_inmuebles — Crear renta
 # -------------------------------------------------------
+@app.post("/rentas_inmuebles", tags=["Rentas (Arrendatario)"])
+def crear_renta(
+    renta: RentaCreate,
+    current_user: ArrendatarioUser,          
+    session: Session = Depends(get_session)  # <-- Al final
+):
 
-@app.post("/rentas_inmuebles", tags=["Arrendatario"])
-def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
-    arrendatario = session.get(Arrendatario, renta.arrendatario_id)
+    # 1. Encontrar el perfil de Arrendatario del usuario logueado
+    arrendatario = session.scalars(
+        select(Arrendatario).where(Arrendatario.user_id == current_user.id)
+    ).first()
+    
     if not arrendatario:
-        raise HTTPException(status_code=404, detail="Arrendatario no encontrado")
+        raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado para este usuario.")
 
-    # ✅ Validar número de baños
+    # 2. Validar baños (tu lógica existente)
     num_banos = renta.banos
-    parte_decimal = num_banos % 1  # obtiene la parte decimal
-
+    parte_decimal = num_banos % 1
     if parte_decimal not in (0, 0.5):
         raise HTTPException(
             status_code=400,
             detail="Sólo se aceptan medios baños o baños enteros (por ejemplo 1, 1.5, 2, 2.5, etc.)."
         )
 
-    nueva_renta = Renta(**renta.dict())
+    # 3. Crear la renta, inyectando el arrendatario_id del usuario logueado
+    nueva_renta = Renta(
+        **renta.dict(),
+        arrendatario_id=arrendatario.id  # <-- ID inferido del token
+    )
     session.add(nueva_renta)
     session.commit()
     session.refresh(nueva_renta)
@@ -180,8 +191,6 @@ def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
         "mensaje": "La renta del inmueble se publicó existosamente",
         "renta_id": nueva_renta.id
     }
-
-
 # -------------------------------------------------------
 # 2️⃣ GET /rentas_inmuebles — Obtener rentas con filtros
 # -------------------------------------------------------
@@ -255,14 +264,32 @@ def obtener_renta_detalle(
 
 
 # -------------------------------------------------------
-# 4️⃣ PATCH /rentas/{id} — Actualizar parcialmente una renta
+# 4️⃣ PATCH /rentas_inmuebles/{id} — Actualizar parcialmente una renta
 # -------------------------------------------------------
-@app.patch("/rentas_inmuebles/{id}", tags=["Arrendatario"])
-def actualizar_renta(id: int, datos: RentaUpdate, session: Session = Depends(get_session)):
+@app.patch("/rentas_inmuebles/{id}", tags=["Rentas (Arrendatario)"])
+def actualizar_renta(
+    id: int, 
+    datos: RentaUpdate,
+    current_user: ArrendatarioUser,           # <-- Antes de 'session'
+    session: Session = Depends(get_session)   # <-- Al final
+):
+    # 1. Encontrar el perfil del Arrendatario logueado
+    arrendatario = session.scalars(
+        select(Arrendatario).where(Arrendatario.user_id == current_user.id)
+    ).first()
+    if not arrendatario:
+        raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado.")
+
+    # 2. Obtener la renta
     renta = session.get(Renta, id)
     if not renta:
         raise HTTPException(status_code=404, detail="Inmueble no encontrado")
 
+    # 3. ¡Verificación de propiedad!
+    if renta.arrendatario_id != arrendatario.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para modificar este inmueble.")
+
+    # 4. Aplicar cambios (tu lógica existente)
     for key, value in datos.dict(exclude_unset=True).items():
         setattr(renta, key, value)
 
@@ -271,7 +298,6 @@ def actualizar_renta(id: int, datos: RentaUpdate, session: Session = Depends(get
     session.refresh(renta)
 
     return {"mensaje": "El inmueble fue actualizado correctamente", "renta_actualizada": renta}
-
 
 # -------------------------------------------------------
 # 5️⃣ GET /historial_renta/{renta_id} — Obtener historial
@@ -329,15 +355,47 @@ def actualizar_historial_renta(
 # -------------------------------------------------------
 # 8️⃣ POST /arrendatario — Crear arrendatario
 # -------------------------------------------------------
-@app.post("/arrendatario")
-def crear_arrendatario(arrendatario: ArrendatarioCreate, session: Session = Depends(get_session)):
-    nuevo_arrendatario = Arrendatario(**arrendatario.dict())
+@app.post("/arrendatario", tags=["Admin"])
+def crear_arrendatario(
+    datos: ArrendatarioConUserCreate,
+    current_admin: SuperUser,                 # <-- Antes de 'session'
+    session: Session = Depends(get_session)   # <-- Al final
+):
+    # 1. Verificar si el username ya existe
+    user_existente = session.scalars(
+        select(User).where(User.username == datos.user_data.username)
+    ).first()
+    if user_existente:
+        raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
+
+    # 2. Crear el objeto User con password hasheado
+    hashed_password = get_password_hash(datos.user_data.password)
+    nuevo_user = User(
+        username=datos.user_data.username,
+        hashed_password=hashed_password,
+        role="arrendatario", # Forzar rol
+        is_active=True
+    )
+    
+    session.add(nuevo_user)
+    session.commit()
+    session.refresh(nuevo_user)
+
+    # 3. Crear el objeto Arrendatario y vincularlo al User
+    nuevo_arrendatario = Arrendatario(
+        **datos.arrendatario_data.dict(),
+        user_id=nuevo_user.id  # <-- El VÍNCULO
+    )
+    
     session.add(nuevo_arrendatario)
     session.commit()
     session.refresh(nuevo_arrendatario)
 
-    return {"mensaje": "Arrendatario publicado exitosamente", "arrendatario_id": nuevo_arrendatario.id}
-
+    return {
+        "mensaje": "Arrendatario y cuenta de usuario creados exitosamente",
+        "arrendatario_id": nuevo_arrendatario.id,
+        "user_id": nuevo_user.id
+    }
 
 # -------------------------------------------------------
 # 9️⃣ PATCH /arrendatario/{id} — Actualizar arrendatario
