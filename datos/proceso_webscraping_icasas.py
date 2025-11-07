@@ -134,4 +134,4 @@ vivi_limpia_renta['precio'] = vivi_limpia_renta['precio'].apply(lambda x: f"{x:.
 vivi_limpia_renta['precio'] = vivi_limpia_renta['precio'].astype(float).round(0).astype(int)
 
 
-vivi_limpia_renta.to_csv("archivos/viviendas_icasas_renta.csv",index=False)
+vivi_limpia_renta.to_csv("viviendas_icasas_renta.csv",index=False)

@@ -73,12 +73,12 @@ arrendatarios_df = arrendatarios_df[['id', 'nombre', 'telefono', 'correo', 'acti
 # Verificar
 print(arrendatarios_df.head())
 
-arrendatarios_df.to_csv("archivos/arrendatarios.csv",index=False)
+arrendatarios_df.to_csv("arrendatarios.csv",index=False)
 
 
 # Simulación de las rentas inmuebles -------------------------------------
 # Cargar el CSV original
-vivi_limpia_renta = pd.read_csv("archivos/viviendas_icasas_renta.csv")
+vivi_limpia_renta = pd.read_csv("viviendas_icasas_renta.csv")
 
 # Simular columna "Edificio"
 vivi_limpia_renta['Edificio'] = np.random.choice(['Casa', 'Departamento'], size=len(vivi_limpia_renta))
@@ -155,13 +155,13 @@ vivi_limpia_renta.columns = [col.lower() for col in vivi_limpia_renta.columns]
 renta = vivi_limpia_renta.copy()
 
 
-renta.to_csv("archivos/rentas.csv",index=False)
+renta.to_csv("rentas.csv",index=False)
 
 # Simulación de renta_muebles ----------------------------------------
 
 
 # Cargar catálogo de muebles
-catalogo_muebles = pd.read_csv("archivos/catalogo_muebles.csv")
+catalogo_muebles = pd.read_csv("catalogo_muebles.csv")
 
 # Lista para guardar filas correctas
 filas = []
@@ -191,13 +191,13 @@ renta_muebles.insert(0, 'id', range(1, len(renta_muebles) + 1))
 print(renta_muebles.head())
 print(renta_muebles.columns)
 
-renta_muebles.to_csv("archivos/renta_muebles.csv",index=False)
+renta_muebles.to_csv("renta_muebles.csv",index=False)
 
 
 # Simulación de renta_servicios ----------------------------------------
 
 # Cargar catálogo de servicios
-catalogo_servicios = pd.read_csv("archivos/catalogo_servicios.csv")
+catalogo_servicios = pd.read_csv("catalogo_servicios.csv")
 
 # Lista para guardar filas correctas
 filas_servicios = []
@@ -227,7 +227,7 @@ renta_servicios.insert(0, 'id', range(1, len(renta_servicios) + 1))
 print(renta_servicios.head())
 print(renta_servicios.columns)
 renta_servicios['servicio_id'] = renta_servicios['servicio_id'].astype(int)
-renta_servicios.to_csv("archivos/renta_servicios.csv",index=False)
+renta_servicios.to_csv("renta_servicios.csv",index=False)
 
 # Simulación del historial----------------------------------------------
 renta_ids = renta['id'].tolist()
@@ -271,4 +271,4 @@ historial_renta.insert(0, 'id', range(1, len(historial_renta)+1))
 
 # Revisar resultado
 print(historial_renta.head(20))
-historial_renta.to_csv("archivos/historial_renta.csv",index=False)
+historial_renta.to_csv("historial_renta.csv",index=False)
