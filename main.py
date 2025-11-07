@@ -8,10 +8,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from typing import List, Optional, Annotated
-from database import create_db_and_tables
+from database import create_db_and_tables, get_session
 
 # Importar tus módulos locales
-from database import get_session
 from models import User, Renta, HistorialRenta
 from schemas import (
     RentaCreate,
@@ -22,14 +21,14 @@ from schemas import (
     HistorialRentaResponse,
     HistorialRentaCreate,
     HistorialRentaUpdate,
-    ArrendatarioCreate,
+    ##ArrendatarioCreate,
     ArrendatarioUpdate
 )
 
 from schemas import (
-    UserBase,
+   # UserBase,
   #  UserCreate,
-    UserSchema,
+    #UserSchema,
  #   UserUpdate,
     Token,
     TokenData
