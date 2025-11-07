@@ -38,7 +38,7 @@ class Renta(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     edificio: str
     habitaciones: int
-    banos: int
+    banos: float
     lat: float
     lon: float
     mascotas: bool

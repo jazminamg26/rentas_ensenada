@@ -24,18 +24,32 @@ app = FastAPI()
 # -------------------------------------------------------
 # 1️⃣ POST /rentas — Crear renta
 # -------------------------------------------------------
-@app.post("/rentas/")
+
+@app.post("/rentas_inmuebles")
 def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
     arrendatario = session.get(Arrendatario, renta.arrendatario_id)
     if not arrendatario:
         raise HTTPException(status_code=404, detail="Arrendatario no encontrado")
+
+    # ✅ Validar número de baños
+    num_banos = renta.banos
+    parte_decimal = num_banos % 1  # obtiene la parte decimal
+
+    if parte_decimal not in (0, 0.5):
+        raise HTTPException(
+            status_code=400,
+            detail="Sólo se aceptan medios baños o baños enteros (por ejemplo 1, 1.5, 2, 2.5, etc.)."
+        )
 
     nueva_renta = Renta(**renta.dict())
     session.add(nueva_renta)
     session.commit()
     session.refresh(nueva_renta)
 
-    return {"mensaje": "La renta del inmueble se publicó existosamente", "renta_id": nueva_renta.id}
+    return {
+        "mensaje": "La renta del inmueble se publicó existosamente",
+        "renta_id": nueva_renta.id
+    }
 
 
 # -------------------------------------------------------
@@ -43,9 +57,8 @@ def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
 # -------------------------------------------------------
 @app.get("/rentas_inmuebles", response_model=List[RentaInmueble])
 def obtener_rentas_inmuebles(
-    edificio: Optional[str] = None,
     habitaciones: Optional[int] = None,
-    banos: Optional[int] = None,
+    banos: Optional[float] = None,
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     mascotas: Optional[bool] = None,
@@ -58,8 +71,6 @@ def obtener_rentas_inmuebles(
 ):
     query = select(Renta)
 
-    if edificio is not None:
-        query = query.where(Renta.edificio == edificio)
     if habitaciones is not None:
         query = query.where(Renta.habitaciones >= habitaciones)
     if banos is not None:
@@ -79,7 +90,7 @@ def obtener_rentas_inmuebles(
     if disponible is not None:
         query = query.where(Renta.disponible == disponible)
     if precio is not None:
-        query = query.where(Renta.precio >= precio)
+        query = query.where(Renta.precio <= precio)
 
     return session.exec(query).all()
 
@@ -163,17 +174,17 @@ def crear_historial_renta(historial: HistorialRentaCreate, session: Session = De
 
 
 # -------------------------------------------------------
-# 7️⃣ PATCH /historial_renta/{renta_id} — Actualizar historial
+# 7️⃣ PATCH /historial_renta/{id} — Actualizar historial
 # -------------------------------------------------------
-@app.patch("/historial_renta/{renta_id}")
+@app.patch("/historial_renta/{id}")
 def actualizar_historial_renta(
-    renta_id: int,
+    id: int,
     datos: HistorialRentaUpdate,
     session: Session = Depends(get_session)
 ):
-    historial = session.get(HistorialRenta, renta_id)
+    historial = session.get(HistorialRenta, id)
     if not historial:
-        raise HTTPException(status_code=404, detail="Inmueble no encontrado")
+        raise HTTPException(status_code=404, detail="Registro de historial no encontrado")
 
     for key, value in datos.dict(exclude_unset=True).items():
         setattr(historial, key, value)
