@@ -1,7 +1,8 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date
-
+from pydantic import BaseModel, ConfigDict
+from datetime import datetime, timedelta, timezone
 
 class RentaCreate(BaseModel):
     edificio: str
@@ -99,9 +100,36 @@ class ArrendatarioCreate(BaseModel):
     activo: bool
 
 
-
 class ArrendatarioUpdate(BaseModel):
     nombre: Optional[str] = None
     telefono: Optional[str] = None
     correo: Optional[str] = None
     activo: Optional[bool] = None
+
+# Adicional para permisos 
+class UserBase(BaseModel):
+    username: str
+    role: str
+
+class UserCreate(BaseModel):
+    username: str
+    password: str 
+    role: str 
+
+class UserSchema(UserBase):
+    id: int
+    active: bool 
+    model_config = ConfigDict(from_attributes=True)
+
+class UserUpdate(BaseModel): # <-- ADD THIS ENTIRE CLASS
+    username: Optional[str] = None
+    password: Optional[str] = None # Set new password
+    role: Optional[str] = None
+    active: Optional[bool] = None
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None

@@ -1,10 +1,18 @@
 from fastapi import FastAPI, HTTPException, Depends, Path
 from typing import List, Optional
 from sqlmodel import Session, select
+from jose import JWTError, jwt
+import bcrypt
+from pydantic import BaseModel, ConfigDict
+from datetime import datetime, timedelta, timezone
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import FastAPI, Depends, HTTPException, Query, status
+from typing import List, Optional, Annotated
+
 
 # Importar tus módulos locales
 from database import get_session
-from models import Renta, Arrendatario, HistorialRenta
+from models import User, Renta, Arrendatario, HistorialRenta
 from schemas import (
     RentaCreate,
     RentaInmueble,
@@ -18,6 +26,128 @@ from schemas import (
     ArrendatarioUpdate
 )
 
+from schemas import (
+    UserBase,
+    UserCreate,
+    UserSchema,
+    UserUpdate,
+    Token,
+    TokenData
+)
+
+SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# --- Password Hashing ---
+# We are using the bcrypt library directly to avoid passlib dependency issues.
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifies a plain password against a hashed one using bcrypt."""
+    plain_password_bytes = plain_password.encode('utf-8')
+    hashed_password_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(plain_password_bytes, hashed_password_bytes)
+
+def get_password_hash(password: str) -> str:
+    """Hashes a plain password using bcrypt."""
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(password_bytes, salt)
+    # Decode to string to store in the database
+    return hashed_bytes.decode('utf-8')
+
+# --- JWT Token Creation ---
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Creates a new JWT access token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# --- User Authentication Function ---
+def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    """Finds a user in the DB and verifies their password."""
+    user = db.scalars(select(User).where(User.username == username)).first()
+    
+    # Check for user existence AND active status
+    if not user or not user.is_active: # <-- MODIFIED
+        return None
+    
+    if not verify_password(password, user.hashed_password):
+        return None
+    return user
+
+
+# --- 6. Authentication Dependencies ---
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Exception for credential errors
+credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
+def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: Session = Depends(get_session)) -> User:
+    """
+    Dependency to get the current user from a JWT token.
+    Validates token, finds user in DB.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    
+    user = session.scalars(select(User).where(User.username == token_data.username)).first()
+    
+    # Check for user existence AND active status
+    if user is None or not user.is_active: # <-- MODIFIED
+        raise credentials_exception
+    return user
+
+# Base dependency for any logged-in user
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+# --- Role-Based Dependencies ---
+def get_current_regular_user(current_user: CurrentUser) -> User:
+    """
+    Ensures the user has at least 'regular' privileges.
+    (All logged-in users are at least 'regular').
+    """
+    return current_user
+
+def get_current_owner(current_user: CurrentUser) -> User:
+    """Ensures the user is an 'owner'."""
+    if current_user.role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action. Owner role required."
+        )
+    return current_user
+
+def get_current_super_user(current_user: CurrentUser) -> User:
+    """Ensures the user is a 'super_user'."""
+    if current_user.role != "super_user":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action. Super User role required."
+        )
+    return current_user
+
+# Type aliases for endpoint security
+RegularUser = Annotated[User, Depends(get_current_regular_user)]
+OwnerUser = Annotated[User, Depends(get_current_owner)]
+SuperUser = Annotated[User, Depends(get_current_super_user)]
+
 app = FastAPI()
 
 
@@ -25,7 +155,7 @@ app = FastAPI()
 # 1️⃣ POST /rentas — Crear renta
 # -------------------------------------------------------
 
-@app.post("/rentas_inmuebles")
+@app.post("/rentas_inmuebles", tags=["Arrendatario"])
 def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
     arrendatario = session.get(Arrendatario, renta.arrendatario_id)
     if not arrendatario:
@@ -127,7 +257,7 @@ def obtener_renta_detalle(
 # -------------------------------------------------------
 # 4️⃣ PATCH /rentas/{id} — Actualizar parcialmente una renta
 # -------------------------------------------------------
-@app.patch("/rentas/{id}")
+@app.patch("/rentas_inmuebles/{id}", tags=["Arrendatario"])
 def actualizar_renta(id: int, datos: RentaUpdate, session: Session = Depends(get_session)):
     renta = session.get(Renta, id)
     if not renta:
@@ -159,7 +289,7 @@ def obtener_historial_renta(renta_id: int, session: Session = Depends(get_sessio
 # -------------------------------------------------------
 # 6️⃣ POST /historial_renta — Crear nuevo historial
 # -------------------------------------------------------
-@app.post("/historial_renta")
+@app.post("/historial_renta", tags=["Arrendatario"])
 def crear_historial_renta(historial: HistorialRentaCreate, session: Session = Depends(get_session)):
     renta = session.get(Renta, historial.renta_id)
     if not renta:
@@ -230,3 +360,30 @@ def actualizar_arrendatario(
     session.refresh(arrendatario)
 
     return {"mensaje": "Modificación exitosa"}
+
+
+# -------------------------------------------------------
+
+@app.post("/token", response_model=Token, tags=["Authentication"])
+def login_for_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    session: Session = Depends(get_session)
+):
+    """
+    Log in to get a JWT token.
+    
+    Username and password are sent in form data (x-www-form-urlencoded).
+    """
+    user = authenticate_user(session, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username, "role": user.role}, 
+        expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
