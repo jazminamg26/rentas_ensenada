@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 # ----------------------------
 # Arrendatario
 # ----------------------------
-class Arrendatario(SQLModel, table=True):
+class User(SQLModel, table=True):
     __tablename__ = "arrendatario"
     id: int = Field(default=None, primary_key=True)
     nombre: str
@@ -78,15 +78,3 @@ class RentaServicios(SQLModel, table=True):
     renta_id: int = Field(foreign_key="renta.id")
     servicio_id: int = Field(foreign_key="catalogo_servicios.id")
 
-# ----------------------------
-class User(SQLModel, table=True):
-    """
-    User model. 'role' can be 'regular', 'owner', or 'super_user'.
-    If 'owner', 'owned_house_id' links to their ExchangeHouse.
-    """
-    _tablename_ = "users"
-    id: int = Field(primary_key=True, index=True)
-    user_name: str = Field(unique=True, index=True)
-    password: str 
-    role: str = Field(default="regular")
-    active: bool = Field(default=True)
