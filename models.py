@@ -53,12 +53,11 @@ class Renta(SQLModel, table=True):
 # ----------------------------
 class HistorialRenta(SQLModel, table=True):
     __tablename__ = "historial_renta"
-    id: int = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
     renta_id: int = Field(foreign_key="renta.id")
-    fecha_inicio: str  # Puedes usar datetime si quieres
-    fecha_fin: str
+    fecha_inicio: date
+    fecha_fin: date
     precio: int
-
 # ----------------------------
 # Renta Muebles
 # ----------------------------

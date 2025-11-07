@@ -1,35 +1,46 @@
-from fastapi import FastAPI, HTTPException, Depends
-from sqlalchemy.orm import Session
-from database import get_session
-from models import Renta, Arrendatario
-from schemas import RentaCreate
+from fastapi import FastAPI, HTTPException, Depends, Path
 from typing import List, Optional
 from sqlmodel import Session, select
-from database import get_session  
-from models import Renta  
-from schemas import RentaInmueble
+
+# Importar tus módulos locales
+from database import get_session
+from models import Renta, Arrendatario, HistorialRenta
+from schemas import (
+    RentaCreate,
+    RentaInmueble,
+    RentaDetalle,
+    ArrendatarioInfo,
+    RentaUpdate,
+    HistorialRentaResponse,
+    HistorialRentaCreate,
+    HistorialRentaUpdate,
+    ArrendatarioCreate,
+    ArrendatarioUpdate
+)
+
 app = FastAPI()
 
-# POST RENTAS
+
+# -------------------------------------------------------
+# 1️⃣ POST /rentas — Crear renta
+# -------------------------------------------------------
 @app.post("/rentas/")
 def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
-    # Verificar que el arrendatario exista
     arrendatario = session.get(Arrendatario, renta.arrendatario_id)
     if not arrendatario:
         raise HTTPException(status_code=404, detail="Arrendatario no encontrado")
-    
+
     nueva_renta = Renta(**renta.dict())
     session.add(nueva_renta)
     session.commit()
     session.refresh(nueva_renta)
-    
-    return {
-        "mensaje": "La renta del inmueble se publicó existosamente",
-        "renta_id": nueva_renta.id
-    }
+
+    return {"mensaje": "La renta del inmueble se publicó existosamente", "renta_id": nueva_renta.id}
 
 
-# GET RENTAS
+# -------------------------------------------------------
+# 2️⃣ GET /rentas_inmuebles — Obtener rentas con filtros
+# -------------------------------------------------------
 @app.get("/rentas_inmuebles", response_model=List[RentaInmueble])
 def obtener_rentas_inmuebles(
     edificio: Optional[str] = None,
@@ -70,31 +81,25 @@ def obtener_rentas_inmuebles(
     if precio is not None:
         query = query.where(Renta.precio >= precio)
 
-    result = session.exec(query).all()
-    return result
+    return session.exec(query).all()
 
 
-
-from schemas import RentaInmueble, RentaDetalle, ArrendatarioInfo
-from fastapi import Path
-
-
+# -------------------------------------------------------
+# 3️⃣ GET /rentas_inmuebles/{id} — Detalle con arrendatario
+# -------------------------------------------------------
 @app.get("/rentas_inmuebles/{id}", response_model=RentaDetalle)
 def obtener_renta_detalle(
     id: int = Path(..., description="ID de la renta"),
     session: Session = Depends(get_session)
 ):
-    # Buscar la renta
     renta = session.get(Renta, id)
     if not renta:
         raise HTTPException(status_code=404, detail="Inmueble no encontrado")
 
-    # Buscar arrendatario
     arrendatario = session.get(Arrendatario, renta.arrendatario_id)
     if not arrendatario:
         raise HTTPException(status_code=404, detail="Arrendatario no encontrado")
 
-    # Armar respuesta
     arrendatario_info = ArrendatarioInfo(
         nombre=arrendatario.nombre,
         telefono=arrendatario.telefono,
@@ -108,59 +113,48 @@ def obtener_renta_detalle(
     )
 
 
-from schemas import RentaUpdate  
+# -------------------------------------------------------
+# 4️⃣ PATCH /rentas/{id} — Actualizar parcialmente una renta
+# -------------------------------------------------------
 @app.patch("/rentas/{id}")
 def actualizar_renta(id: int, datos: RentaUpdate, session: Session = Depends(get_session)):
     renta = session.get(Renta, id)
     if not renta:
         raise HTTPException(status_code=404, detail="Inmueble no encontrado")
-    
-    # Actualizar solo los campos enviados
+
     for key, value in datos.dict(exclude_unset=True).items():
         setattr(renta, key, value)
-    
+
     session.add(renta)
     session.commit()
     session.refresh(renta)
-    
-    return {
-        "mensaje": "El inmueble fue actualizado correctamente",
-        "renta_actualizada": renta
-    }
 
-from models import HistorialRenta
-from schemas import HistorialRentaResponse
-from schemas import HistorialRentaCreate
+    return {"mensaje": "El inmueble fue actualizado correctamente", "renta_actualizada": renta}
 
-@app.get("/historial_renta/{renta_id}", response_model=list[HistorialRentaResponse])
+
+# -------------------------------------------------------
+# 5️⃣ GET /historial_renta/{renta_id} — Obtener historial
+# -------------------------------------------------------
+@app.get("/historial_renta/{renta_id}", response_model=List[HistorialRentaResponse])
 def obtener_historial_renta(renta_id: int, session: Session = Depends(get_session)):
-    # Verificar si la renta existe
     renta = session.get(Renta, renta_id)
     if not renta:
         raise HTTPException(status_code=404, detail="No se encontró el inmueble")
 
-    # Consultar historial asociado
     query = select(HistorialRenta).where(HistorialRenta.renta_id == renta_id)
-    historial = session.exec(query).all()
+    return session.exec(query).all()
 
-    return historial
 
+# -------------------------------------------------------
+# 6️⃣ POST /historial_renta — Crear nuevo historial
+# -------------------------------------------------------
 @app.post("/historial_renta")
 def crear_historial_renta(historial: HistorialRentaCreate, session: Session = Depends(get_session)):
-    # Buscar la renta por id
     renta = session.get(Renta, historial.renta_id)
-    
-    # Si no existe, responder con mensaje de error
     if not renta:
         raise HTTPException(status_code=404, detail="Inmueble no encontrado")
-    
-    # Crear nuevo registro en historial
-    nuevo_historial = HistorialRenta(
-        renta_id=historial.renta_id,
-        fecha_inicio=historial.fecha_inicio,
-        fecha_fin=historial.fecha_fin,
-        precio=historial.precio
-    )
+
+    nuevo_historial = HistorialRenta(**historial.dict())
     session.add(nuevo_historial)
     session.commit()
     session.refresh(nuevo_historial)
@@ -168,25 +162,60 @@ def crear_historial_renta(historial: HistorialRentaCreate, session: Session = De
     return {"mensaje": "Historial agregado exitosamente"}
 
 
-from schemas import HistorialRentaUpdate
-
+# -------------------------------------------------------
+# 7️⃣ PATCH /historial_renta/{renta_id} — Actualizar historial
+# -------------------------------------------------------
 @app.patch("/historial_renta/{renta_id}")
 def actualizar_historial_renta(
     renta_id: int,
     datos: HistorialRentaUpdate,
     session: Session = Depends(get_session)
 ):
-    # Verificar si existe el historial
     historial = session.get(HistorialRenta, renta_id)
     if not historial:
         raise HTTPException(status_code=404, detail="Inmueble no encontrado")
-    
-    # Actualizar solo los campos que fueron enviados
+
     for key, value in datos.dict(exclude_unset=True).items():
         setattr(historial, key, value)
 
     session.add(historial)
     session.commit()
     session.refresh(historial)
+
+    return {"mensaje": "Modificación exitosa"}
+
+
+# -------------------------------------------------------
+# 8️⃣ POST /arrendatario — Crear arrendatario
+# -------------------------------------------------------
+@app.post("/arrendatario")
+def crear_arrendatario(arrendatario: ArrendatarioCreate, session: Session = Depends(get_session)):
+    nuevo_arrendatario = Arrendatario(**arrendatario.dict())
+    session.add(nuevo_arrendatario)
+    session.commit()
+    session.refresh(nuevo_arrendatario)
+
+    return {"mensaje": "Arrendatario publicado exitosamente", "arrendatario_id": nuevo_arrendatario.id}
+
+
+# -------------------------------------------------------
+# 9️⃣ PATCH /arrendatario/{id} — Actualizar arrendatario
+# -------------------------------------------------------
+@app.patch("/arrendatario/{arrendatario_id}")
+def actualizar_arrendatario(
+    arrendatario_id: int,
+    datos: ArrendatarioUpdate,
+    session: Session = Depends(get_session)
+):
+    arrendatario = session.get(Arrendatario, arrendatario_id)
+    if not arrendatario:
+        raise HTTPException(status_code=404, detail="Arrendatario no encontrado")
+
+    for key, value in datos.dict(exclude_unset=True).items():
+        setattr(arrendatario, key, value)
+
+    session.add(arrendatario)
+    session.commit()
+    session.refresh(arrendatario)
 
     return {"mensaje": "Modificación exitosa"}

@@ -97,3 +97,22 @@ class HistorialRentaUpdate(BaseModel):
     fecha_inicio: Optional[date] = None
     fecha_fin: Optional[date] = None
     precio: Optional[float] = None
+
+
+from pydantic import BaseModel
+from typing import Optional
+
+class ArrendatarioCreate(BaseModel):
+    nombre: str
+    telefono: str
+    correo: str
+    activo: bool
+
+from pydantic import BaseModel
+from typing import Optional
+
+class ArrendatarioUpdate(BaseModel):
+    nombre: Optional[str] = None
+    telefono: Optional[str] = None
+    correo: Optional[str] = None
+    activo: Optional[bool] = None
