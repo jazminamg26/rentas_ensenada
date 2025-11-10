@@ -8,10 +8,10 @@ from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from typing import List, Optional, Annotated
-from database import create_db_and_tables, get_session
+from database import create_db_and_tables, get_session, engine
 
 # Importar tus módulos locales
-from models import User, Renta, HistorialRenta
+from models import Arrendatario, User, Renta, HistorialRenta
 from schemas import (
     RentaCreate,
     RentaInmueble,
@@ -75,10 +75,10 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     user = db.scalars(select(User).where(User.username == username)).first()
     
     # Check for user existence AND active status
-    if not user or not user.is_active: # <-- MODIFIED
+    if not user or not user.active: # <-- MODIFIED
         return None
     
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user.password):
         return None
     return user
 
@@ -111,7 +111,7 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: Ses
     user = session.scalars(select(User).where(User.username == token_data.username)).first()
     
     # Check for user existence AND active status
-    if user is None or not user.is_active: # <-- MODIFIED
+    if user is None or not user.active: # <-- MODIFIED
         raise credentials_exception
     return user
 
@@ -145,7 +145,38 @@ app = FastAPI()
 
 @app.on_event("startup")
 def on_startup():
-    create_db_and_tables()
+    create_db_and_tables() 
+    crear_super_usuario_inicial()
+
+
+def crear_super_usuario_inicial():
+    """Crea un superusuario por defecto si no existe."""
+    with Session(engine) as session:
+        # Cambia estos valores si quieres personalizar el superusuario
+        username = "admin"
+        password = "admin123"
+        role = "super_user"
+
+        # Verifica si ya existe
+        existing_user = session.exec(
+            select(User).where(User.username == username)
+        ).first()
+
+        if existing_user:
+            print(f"✅ Super usuario '{username}' ya existe.")
+            return
+
+        # Si no existe, lo crea
+        hashed_password = get_password_hash(password)
+        super_user = User(
+            username=username,
+            password=hashed_password,
+            role=role,
+            active=True
+        )
+        session.add(super_user)
+        session.commit()
+        print(f"🚀 Super usuario creado: {username} / {password}")
 
 
 
@@ -371,9 +402,9 @@ def crear_arrendatario(
     hashed_password = get_password_hash(datos.user_data.password)
     nuevo_user = User(
         username=datos.user_data.username,
-        hashed_password=hashed_password,
+        password=hashed_password,
         role="arrendatario", # Forzar rol
-        is_active=True
+        active=True
     )
     
     session.add(nuevo_user)

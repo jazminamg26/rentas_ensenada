@@ -128,7 +128,7 @@ class UserSchema(UserBase):
 class UserCreate(BaseModel):
     username: str
     password: str 
-    role: str 
+    #role: str 
 
 
 #class UserUpdate(BaseModel): # <-- ADD THIS ENTIRE CLASS
