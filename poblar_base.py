@@ -180,13 +180,12 @@ def scrapear_y_simular(estado="baja-california-ensenada", tipo="renta", num_arre
     print(f"✅ Generados {len(arrendatarios_df)} arrendatarios.")
     
     # C. Simulación de Renta Inmuebles
-    # C. Simulación de Renta Inmuebles
     renta = vivi_limpia_renta.copy()
     renta['Edificio'] = np.random.choice(['Casa', 'Departamento'], size=len(renta))
     
     # ESTA LÍNEA AHORA FUNCIONARÁ CORRECTAMENTE porque 'recamaras' es Int64
     renta['Banos'] = renta['recamaras'].apply(lambda x: 1 if x <= 2 else np.random.choice([1, 2]))
-    
+
     renta['Mascotas'] = np.random.choice([True, False], size=len(renta))
     renta['Tinaco'] = np.random.choice([True, False], size=len(renta))
     renta['Estacionamiento'] = np.random.choice([0, 1], size=len(renta))
