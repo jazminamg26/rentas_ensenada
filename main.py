@@ -9,7 +9,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from typing import List, Optional, Annotated
 from database import create_db_and_tables, get_session, engine
-
+from typing import Dict, Any
 # Importar tus módulos locales
 from models import Arrendatario, User, Renta, HistorialRenta
 from schemas import (
@@ -179,7 +179,7 @@ def crear_super_usuario_inicial():
 # -------------------------------------------------------
 # POST /rentas_inmuebles — Crear renta
 # -------------------------------------------------------
-@app.post("/rentas_inmuebles", tags=["Rentas (Arrendatario)"])
+@app.post("/rentas_inmuebles", tags=["Arrendatario"])
 def crear_renta(
     renta: RentaCreate,
     current_user: ArrendatarioUser,          
@@ -337,7 +337,7 @@ def obtener_historial_renta(renta_id: int, session: Session = Depends(get_sessio
     return session.exec(query).all()
 
 
-
+""" 
 # -------------------------------------------------------
 # POST /historial_renta — Crear nuevo historial (Admin y Dueño)
 # -------------------------------------------------------
@@ -392,9 +392,102 @@ def crear_historial_renta(
 
     return {"mensaje": "Historial agregado exitosamente", "historial_id": nuevo_historial.id}
 
-
+ """
 
 # -------------------------------------------------------
+# POST /historial_renta — Crear nuevo historial (Solo Arrendatario Dueño)
+# -------------------------------------------------------
+@app.post("/historial_renta", tags=["Arrendatario"], status_code=status.HTTP_201_CREATED)
+def crear_historial_renta(
+    historial: HistorialRentaCreate,
+    current_user: CurrentUser, 
+    session: Session = Depends(get_session)
+) -> Dict[str, Any]:
+    """
+    Crea un nuevo registro en el historial de renta.
+    Solo permitido para el usuario con rol 'arrendatario' que sea dueño de la renta asociada.
+    """
+
+    # 1. Lógica de permisos por ROL: Solo Arrendatario
+    if current_user.role != "arrendatario":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo el Arrendatario asociado puede crear registros de historial."
+        )
+
+    # 2. Validar que la Renta (a la que se añade el historial) existe
+    renta = session.get(Renta, historial.renta_id)
+    if not renta:
+        raise HTTPException(status_code=404, detail="Renta no encontrada")
+
+    # 3. Lógica para Arrendatario (solo sus rentas)
+    
+    # 3.1. Encontrar el perfil de arrendatario del usuario logueado
+    arrendatario_logueado = session.scalars(
+        select(Arrendatario).where(Arrendatario.user_id == current_user.id)
+    ).first()
+
+    if not arrendatario_logueado:
+        raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado.")
+
+    # 3.2. ¡Verificación de propiedad!
+    # Comprobar si el 'arrendatario_id' de la Renta es el ID del logueado
+    if renta.arrendatario_id != arrendatario_logueado.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="No tienes permiso para agregar historial a esta renta, ya que no eres el arrendatario asociado."
+        )
+        
+    # 4. Crear el historial (Si pasó los filtros de seguridad)
+    nuevo_historial = HistorialRenta(**historial.dict())
+    session.add(nuevo_historial)
+    session.commit()
+    session.refresh(nuevo_historial)
+
+    return {"mensaje": "Historial agregado exitosamente", "historial_id": nuevo_historial.id}
+
+# -------------------------------------------------------
+# PATCH /historial_renta/{id} — Actualizar historial (Solo Super User)
+# -------------------------------------------------------
+@app.patch("/historial_renta/{id}", tags=["Admin"], status_code=status.HTTP_200_OK)
+def actualizar_historial_renta(
+    id: int,
+    datos: HistorialRentaUpdate,
+    current_user: CurrentUser,                      # <-- Requerimos el usuario para verificar el rol
+    session: Session = Depends(get_session)
+) -> Dict[str, Any]:
+    """
+    Permite la actualización de un registro de historial de renta.
+    Restringido únicamente al rol 'super_user'.
+    """
+
+    # 1. Lógica de permisos por ROL
+    # Solo se permite la ejecución si el rol es 'super_user'
+    if current_user.role != "super_user":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo un Super User puede modificar registros de historial de renta."
+        )
+
+    # 2. Obtener el historial que se quiere modificar
+    historial = session.get(HistorialRenta, id)
+    if not historial:
+        raise HTTPException(status_code=404, detail="Registro de historial no encontrado")
+
+    # 3. Si todo está bien (y el usuario es super_user), aplicar cambios
+    # Se eliminó la lógica de verificación de propiedad de arrendatario.
+    
+    # Aplicar los datos de actualización, ignorando campos no proporcionados (exclude_unset=True)
+    for key, value in datos.dict(exclude_unset=True).items():
+        setattr(historial, key, value)
+
+    session.add(historial)
+    session.commit()
+    session.refresh(historial)
+
+    return {"mensaje": "Modificación exitosa", "historial_id": historial.id}
+
+""" # -------------------------------------------------------
 # PATCH /historial_renta/{id} — Actualizar historial
 # -------------------------------------------------------
 @app.patch("/historial_renta/{id}", tags=["Arrendatario"]) # <-- Opcional: Añadí un tag
@@ -441,7 +534,7 @@ def actualizar_historial_renta(
     session.refresh(historial)
 
     return {"mensaje": "Modificación exitosa"}
-
+ """
 
 # -------------------------------------------------------
 # POST /arrendatario — Crear arrendatario
