@@ -296,7 +296,7 @@ def obtener_renta_detalle(
 # -------------------------------------------------------
 # 4️⃣ PATCH /rentas_inmuebles/{id} — Actualizar parcialmente una renta
 # -------------------------------------------------------
-@app.patch("/rentas_inmuebles/{id}", tags=["Rentas (Arrendatario)"])
+@app.patch("/rentas_inmuebles/{id}", tags=["Arrendatario"])
 def actualizar_renta(
     id: int, 
     datos: RentaUpdate,
@@ -477,10 +477,72 @@ def crear_arrendatario(
         "user_id": nuevo_user.id
     }
 
+
+
+
+# -------------------------------------------------------
+# 9️⃣ PATCH /arrendatario/{id} — Actualizar arrendatario (Admin y Dueño)
+# -------------------------------------------------------
+@app.patch("/arrendatario/{arrendatario_id}", tags=["Arrendatario", "Admin"])
+def actualizar_arrendatario(
+    arrendatario_id: int,
+    datos: ArrendatarioUpdate,
+    current_user: CurrentUser,                 # <-- AÑADIDO: Pide el usuario logueado (cualquier rol)
+    session: Session = Depends(get_session)
+):
+    # --- Lógica para Super User ---
+    if current_user.role == "super_user":
+        # El super_user puede editar a CUALQUIER arrendatario por ID
+        arrendatario = session.get(Arrendatario, arrendatario_id)
+        if not arrendatario:
+            raise HTTPException(status_code=404, detail="Arrendatario no encontrado")
+        
+        # Aplicar cambios
+        for key, value in datos.dict(exclude_unset=True).items():
+            setattr(arrendatario, key, value)
+
+        session.add(arrendatario)
+        session.commit()
+        session.refresh(arrendatario)
+        return {"mensaje": "Modificación (Admin) exitosa", "arrendatario_actualizado": arrendatario}
+
+    # --- Lógica para Arrendatario (solo él mismo) ---
+    elif current_user.role == "arrendatario":
+        # 1. Encontrar el perfil de arrendatario del usuario logueado
+        arrendatario_logueado = session.scalars(
+            select(Arrendatario).where(Arrendatario.user_id == current_user.id)
+        ).first()
+
+        if not arrendatario_logueado:
+            raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado para este usuario.")
+
+        # 2. ¡Verificación de propiedad!
+        # Comprobar si el ID que intenta editar (de la URL) es su propio ID
+        if arrendatario_logueado.id != arrendatario_id:
+            raise HTTPException(status_code=403, detail="No tienes permiso para modificar este perfil.")
+        
+        # 3. Si son el mismo, aplicar cambios (el objeto a modificar es arrendatario_logueado)
+        for key, value in datos.dict(exclude_unset=True).items():
+            setattr(arrendatario_logueado, key, value)
+        
+        session.add(arrendatario_logueado)
+        session.commit()
+        session.refresh(arrendatario_logueado)
+        return {"mensaje": "Tu perfil ha sido actualizado exitosamente", "arrendatario_actualizado": arrendatario_logueado}
+
+    # --- Si no es ninguno de esos roles ---
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes los permisos necesarios para esta acción."
+        )
+
+
+
 # -------------------------------------------------------
 # 9️⃣ PATCH /arrendatario/{id} — Actualizar arrendatario
 # -------------------------------------------------------
-@app.patch("/arrendatario/{arrendatario_id}")
+""" @app.patch("/arrendatario/{arrendatario_id}")
 def actualizar_arrendatario(
     arrendatario_id: int,
     datos: ArrendatarioUpdate,
@@ -497,7 +559,7 @@ def actualizar_arrendatario(
     session.commit()
     session.refresh(arrendatario)
 
-    return {"mensaje": "Modificación exitosa"}
+    return {"mensaje": "Modificación exitosa"} """
 
 
 # -------------------------------------------------------
