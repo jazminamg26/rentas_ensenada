@@ -7,6 +7,7 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import sessionmaker, Session, relationship, DeclarativeBase, Mapped, mapped_column
+
 # ----------------------------
 # User
 # ----------------------------
@@ -124,7 +125,3 @@ class RentaServicios(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     renta_id: int = Field(foreign_key="renta.id")
     servicio_id: int = Field(foreign_key="catalogo_servicios.id")
-
-
-
-

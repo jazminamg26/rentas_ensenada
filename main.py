@@ -21,15 +21,10 @@ from schemas import (
     HistorialRentaResponse,
     HistorialRentaCreate,
     HistorialRentaUpdate,
-    ##ArrendatarioCreate,
     ArrendatarioUpdate
 )
 
 from schemas import (
-   # UserBase,
-  #  UserCreate,
-    #UserSchema,
- #   UserUpdate,
     Token,
     TokenData
 )
@@ -176,13 +171,13 @@ def crear_super_usuario_inicial():
         )
         session.add(super_user)
         session.commit()
-        print(f"🚀 Super usuario creado: {username} / {password}")
+        print(f"Super usuario creado: {username} / {password}")
 
 
 
 
 # -------------------------------------------------------
-# 1️⃣ POST /rentas_inmuebles — Crear renta
+# POST /rentas_inmuebles — Crear renta
 # -------------------------------------------------------
 @app.post("/rentas_inmuebles", tags=["Rentas (Arrendatario)"])
 def crear_renta(
@@ -222,7 +217,7 @@ def crear_renta(
         "renta_id": nueva_renta.id
     }
 # -------------------------------------------------------
-# 2️⃣ GET /rentas_inmuebles — Obtener rentas con filtros
+# GET /rentas_inmuebles — Obtener rentas con filtros
 # -------------------------------------------------------
 @app.get("/rentas_inmuebles", response_model=List[RentaInmueble])
 def obtener_rentas_inmuebles(
@@ -265,7 +260,7 @@ def obtener_rentas_inmuebles(
 
 
 # -------------------------------------------------------
-# 3️⃣ GET /rentas_inmuebles/{id} — Detalle con arrendatario
+# GET /rentas_inmuebles/{id} — Detalle con arrendatario
 # -------------------------------------------------------
 @app.get("/rentas_inmuebles/{id}", response_model=RentaDetalle)
 def obtener_renta_detalle(
@@ -294,7 +289,7 @@ def obtener_renta_detalle(
 
 
 # -------------------------------------------------------
-# 4️⃣ PATCH /rentas_inmuebles/{id} — Actualizar parcialmente una renta
+# PATCH /rentas_inmuebles/{id} — Actualizar parcialmente una renta
 # -------------------------------------------------------
 @app.patch("/rentas_inmuebles/{id}", tags=["Arrendatario"])
 def actualizar_renta(
@@ -330,7 +325,7 @@ def actualizar_renta(
     return {"mensaje": "El inmueble fue actualizado correctamente", "renta_actualizada": renta}
 
 # -------------------------------------------------------
-# 5️⃣ GET /historial_renta/{renta_id} — Obtener historial
+# GET /historial_renta/{renta_id} — Obtener historial
 # -------------------------------------------------------
 @app.get("/historial_renta/{renta_id}", response_model=List[HistorialRentaResponse])
 def obtener_historial_renta(renta_id: int, session: Session = Depends(get_session)):
@@ -342,25 +337,65 @@ def obtener_historial_renta(renta_id: int, session: Session = Depends(get_sessio
     return session.exec(query).all()
 
 
+
 # -------------------------------------------------------
-# 6️⃣ POST /historial_renta — Crear nuevo historial
+# POST /historial_renta — Crear nuevo historial (Admin y Dueño)
 # -------------------------------------------------------
-@app.post("/historial_renta", tags=["Arrendatario"])
-def crear_historial_renta(historial: HistorialRentaCreate, session: Session = Depends(get_session)):
+@app.post("/historial_renta", tags=["Arrendatario", "Admin"]) # <-- Actualicé los tags
+def crear_historial_renta(
+    historial: HistorialRentaCreate,
+    current_user: CurrentUser,                 # <-- AÑADIDO: Pide el usuario logueado
+    session: Session = Depends(get_session)
+):
+    # 1. Validar que la Renta (a la que se añade el historial) existe
     renta = session.get(Renta, historial.renta_id)
     if not renta:
         raise HTTPException(status_code=404, detail="Inmueble no encontrado")
 
+    # 2. Lógica de permisos por ROL
+    
+    # --- Lógica para Super User ---
+    if current_user.role == "super_user":
+        # El super_user puede agregar historial a CUALQUIER renta.
+        # No se necesita ninguna validación adicional.
+        pass # Pasa directo a la creación
+
+    # --- Lógica para Arrendatario (solo sus rentas) ---
+    elif current_user.role == "arrendatario":
+        # 1. Encontrar el perfil de arrendatario del usuario logueado
+        arrendatario_logueado = session.scalars(
+            select(Arrendatario).where(Arrendatario.user_id == current_user.id)
+        ).first()
+
+        if not arrendatario_logueado:
+            raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado.")
+
+        # 2. ¡Verificación de propiedad!
+        # Comprobar si el 'arrendatario_id' de la Renta es el ID del logueado
+        if renta.arrendatario_id != arrendatario_logueado.id:
+            raise HTTPException(status_code=403, detail="No tienes permiso para agregar historial a este inmueble.")
+        
+        # Si pasa el check, se le permite crear
+    
+    # --- Si no es ninguno de esos roles ---
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes los permisos necesarios para esta acción."
+        )
+
+    # 3. Crear el historial (Si pasó los filtros de seguridad)
     nuevo_historial = HistorialRenta(**historial.dict())
     session.add(nuevo_historial)
     session.commit()
     session.refresh(nuevo_historial)
 
-    return {"mensaje": "Historial agregado exitosamente"}
+    return {"mensaje": "Historial agregado exitosamente", "historial_id": nuevo_historial.id}
+
 
 
 # -------------------------------------------------------
-# 7️⃣ PATCH /historial_renta/{id} — Actualizar historial
+# PATCH /historial_renta/{id} — Actualizar historial
 # -------------------------------------------------------
 @app.patch("/historial_renta/{id}", tags=["Arrendatario"]) # <-- Opcional: Añadí un tag
 def actualizar_historial_renta(
@@ -408,32 +443,8 @@ def actualizar_historial_renta(
     return {"mensaje": "Modificación exitosa"}
 
 
-
 # -------------------------------------------------------
-# 7️⃣ PATCH /historial_renta/{id} — Actualizar historial
-# -------------------------------------------------------
-#@app.patch("/historial_renta/{id}")
-#def actualizar_historial_renta(
-#    id: int,
-#    datos: HistorialRentaUpdate,
-#    session: Session = Depends(get_session)
-#):
-#    historial = session.get(HistorialRenta, id)
-#    if not historial:
-#        raise HTTPException(status_code=404, detail="Registro de historial no encontrado")
-
-"""     for key, value in datos.dict(exclude_unset=True).items():
-        setattr(historial, key, value)
-
-    session.add(historial)
-    session.commit()
-    session.refresh(historial)
-
-    return {"mensaje": "Modificación exitosa"} """
-
-
-# -------------------------------------------------------
-# 8️⃣ POST /arrendatario — Crear arrendatario
+# POST /arrendatario — Crear arrendatario
 # -------------------------------------------------------
 @app.post("/arrendatario", tags=["Admin"])
 def crear_arrendatario(
@@ -478,10 +489,8 @@ def crear_arrendatario(
     }
 
 
-
-
 # -------------------------------------------------------
-# 9️⃣ PATCH /arrendatario/{id} — Actualizar arrendatario (Admin y Dueño)
+# PATCH /arrendatario/{id} — Actualizar arrendatario (Admin y Dueño)
 # -------------------------------------------------------
 @app.patch("/arrendatario/{arrendatario_id}", tags=["Arrendatario", "Admin"])
 def actualizar_arrendatario(
@@ -539,30 +548,6 @@ def actualizar_arrendatario(
 
 
 
-# -------------------------------------------------------
-# 9️⃣ PATCH /arrendatario/{id} — Actualizar arrendatario
-# -------------------------------------------------------
-""" @app.patch("/arrendatario/{arrendatario_id}")
-def actualizar_arrendatario(
-    arrendatario_id: int,
-    datos: ArrendatarioUpdate,
-    session: Session = Depends(get_session)
-):
-    arrendatario = session.get(Arrendatario, arrendatario_id)
-    if not arrendatario:
-        raise HTTPException(status_code=404, detail="Arrendatario no encontrado")
-
-    for key, value in datos.dict(exclude_unset=True).items():
-        setattr(arrendatario, key, value)
-
-    session.add(arrendatario)
-    session.commit()
-    session.refresh(arrendatario)
-
-    return {"mensaje": "Modificación exitosa"} """
-
-
-# -------------------------------------------------------
 
 @app.post("/token", response_model=Token, tags=["Authentication"])
 def login_for_access_token(

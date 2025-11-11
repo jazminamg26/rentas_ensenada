@@ -131,12 +131,6 @@ class UserCreate(BaseModel):
     #role: str 
 
 
-#class UserUpdate(BaseModel): # <-- ADD THIS ENTIRE CLASS
-#    username: Optional[str] = None
-#    password: Optional[str] = None # Set new password
-#    role: Optional[str] = None
-#    active: Optional[bool] = None
-
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -151,8 +145,6 @@ class ArrendatarioConUserCreate(BaseModel):
 
 
 class RentaCreate(BaseModel):
-    # ¡YA NO SE INCLUYE arrendatario_id!
-    # Se inferirá del usuario logueado.
     edificio: str
     habitaciones: int
     banos: float
