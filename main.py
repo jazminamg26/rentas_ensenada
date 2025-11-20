@@ -337,62 +337,6 @@ def obtener_historial_renta(renta_id: int, session: Session = Depends(get_sessio
     return session.exec(query).all()
 
 
-""" 
-# -------------------------------------------------------
-# POST /historial_renta — Crear nuevo historial (Admin y Dueño)
-# -------------------------------------------------------
-@app.post("/historial_renta", tags=["Arrendatario", "Admin"]) # <-- Actualicé los tags
-def crear_historial_renta(
-    historial: HistorialRentaCreate,
-    current_user: CurrentUser,                 # <-- AÑADIDO: Pide el usuario logueado
-    session: Session = Depends(get_session)
-):
-    # 1. Validar que la Renta (a la que se añade el historial) existe
-    renta = session.get(Renta, historial.renta_id)
-    if not renta:
-        raise HTTPException(status_code=404, detail="Inmueble no encontrado")
-
-    # 2. Lógica de permisos por ROL
-    
-    # --- Lógica para Super User ---
-    if current_user.role == "super_user":
-        # El super_user puede agregar historial a CUALQUIER renta.
-        # No se necesita ninguna validación adicional.
-        pass # Pasa directo a la creación
-
-    # --- Lógica para Arrendatario (solo sus rentas) ---
-    elif current_user.role == "arrendatario":
-        # 1. Encontrar el perfil de arrendatario del usuario logueado
-        arrendatario_logueado = session.scalars(
-            select(Arrendatario).where(Arrendatario.user_id == current_user.id)
-        ).first()
-
-        if not arrendatario_logueado:
-            raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado.")
-
-        # 2. ¡Verificación de propiedad!
-        # Comprobar si el 'arrendatario_id' de la Renta es el ID del logueado
-        if renta.arrendatario_id != arrendatario_logueado.id:
-            raise HTTPException(status_code=403, detail="No tienes permiso para agregar historial a este inmueble.")
-        
-        # Si pasa el check, se le permite crear
-    
-    # --- Si no es ninguno de esos roles ---
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes los permisos necesarios para esta acción."
-        )
-
-    # 3. Crear el historial (Si pasó los filtros de seguridad)
-    nuevo_historial = HistorialRenta(**historial.dict())
-    session.add(nuevo_historial)
-    session.commit()
-    session.refresh(nuevo_historial)
-
-    return {"mensaje": "Historial agregado exitosamente", "historial_id": nuevo_historial.id}
-
- """
 
 # -------------------------------------------------------
 # POST /historial_renta — Crear nuevo historial (Solo Arrendatario Dueño)
@@ -487,54 +431,6 @@ def actualizar_historial_renta(
 
     return {"mensaje": "Modificación exitosa", "historial_id": historial.id}
 
-""" # -------------------------------------------------------
-# PATCH /historial_renta/{id} — Actualizar historial
-# -------------------------------------------------------
-@app.patch("/historial_renta/{id}", tags=["Arrendatario"]) # <-- Opcional: Añadí un tag
-def actualizar_historial_renta(
-    id: int,
-    datos: HistorialRentaUpdate,
-    current_user: ArrendatarioUser,      # <-- AÑADIDO: Requiere un arrendatario logueado
-    session: Session = Depends(get_session)  # <-- Al final
-):
-    # 1. Encontrar el perfil del Arrendatario logueado
-    # (Usamos el user_id del token para encontrar su perfil de Arrendatario)
-    arrendatario_logueado = session.scalars(
-        select(Arrendatario).where(Arrendatario.user_id == current_user.id)
-    ).first()
-    
-    if not arrendatario_logueado:
-        raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado.")
-
-    # 2. Obtener el historial que se quiere modificar
-    historial = session.get(HistorialRenta, id)
-    if not historial:
-        raise HTTPException(status_code=404, detail="Registro de historial no encontrado")
-
-    # 3. Obtener la Renta a la que pertenece ese historial
-    # (Necesitamos la renta para saber quién es el dueño)
-    renta_asociada = session.get(Renta, historial.renta_id)
-    
-    if not renta_asociada:
-        # Esto no debería pasar si la BDD está bien, pero es una buena validación
-        raise HTTPException(status_code=404, detail="No se encontró la renta asociada a este historial.")
-
-    # 4. ¡Verificación de propiedad!
-    # Comprobar si el ID del arrendatario logueado es el mismo
-    # que el ID del arrendatario dueño de la Renta.
-    if renta_asociada.arrendatario_id != arrendatario_logueado.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para modificar el historial de este inmueble.")
-
-    # 5. Si todo está bien, aplicar cambios (lógica original)
-    for key, value in datos.dict(exclude_unset=True).items():
-        setattr(historial, key, value)
-
-    session.add(historial)
-    session.commit()
-    session.refresh(historial)
-
-    return {"mensaje": "Modificación exitosa"}
- """
 
 # -------------------------------------------------------
 # POST /arrendatario — Crear arrendatario

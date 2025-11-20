@@ -2,7 +2,7 @@
 from typing import Optional
 # models.py
 from typing import Optional, List
-from sqlmodel import SQLModel, Field, Relationship  # <-- ¡Asegúrate de que sea 'Relationship'!
+from sqlmodel import SQLModel, Field, Relationship 
 from datetime import date
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timedelta, timezone
@@ -12,10 +12,7 @@ from sqlalchemy.orm import sessionmaker, Session, relationship, DeclarativeBase,
 # User
 # ----------------------------
 class User(SQLModel, table=True):
-    """
-    Almacena las credenciales de inicio de sesión.
-    Los roles pueden ser 'super_user' o 'arrendatario'.
-    """
+
     _tablename_ = "user"  # Nueva tabla
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True, max_length=50)
