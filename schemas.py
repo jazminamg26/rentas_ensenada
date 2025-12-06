@@ -3,9 +3,12 @@ from pydantic import BaseModel
 from pydantic import BaseModel
 from typing import Optional
 <<<<<<< HEAD
+<<<<<<< HEAD
 from datetime import date
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timedelta, timezone
+=======
+>>>>>>> parent of 5564bcd (terminado)
 =======
 >>>>>>> parent of 5564bcd (terminado)
 
@@ -124,6 +127,11 @@ class ArrendatarioCreate(BaseModel):
     activo: bool
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+from pydantic import BaseModel
+from typing import Optional
+>>>>>>> parent of 5564bcd (terminado)
 =======
 from pydantic import BaseModel
 from typing import Optional
