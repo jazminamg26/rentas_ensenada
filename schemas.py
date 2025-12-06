@@ -1,21 +1,13 @@
-from typing import Optional
-from pydantic import BaseModel
 from pydantic import BaseModel
 from typing import Optional
-<<<<<<< HEAD
-<<<<<<< HEAD
 from datetime import date
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timedelta, timezone
-=======
->>>>>>> parent of 5564bcd (terminado)
-=======
->>>>>>> parent of 5564bcd (terminado)
 
 class RentaCreate(BaseModel):
     edificio: str
     habitaciones: int
-    banos: int
+    banos: float
     lat: float
     lon: float
     mascotas: bool
@@ -32,7 +24,7 @@ class RentaInmueble(BaseModel):
     id: int
     edificio: str
     habitaciones: int
-    banos: int
+    banos: float
     lat: float
     lon: float
     mascotas: bool
@@ -68,13 +60,11 @@ class RentaDetalle(RentaInmueble):
     arrendatario: ArrendatarioInfo
     link_historial: str
 
-from typing import Optional
-from pydantic import BaseModel
 
 class RentaUpdate(BaseModel):
     edificio: Optional[str] = None
     habitaciones: Optional[int] = None
-    banos: Optional[int] = None
+    banos: Optional[float] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
     mascotas: Optional[bool] = None
@@ -85,11 +75,10 @@ class RentaUpdate(BaseModel):
     precio: Optional[int] = None
     arrendatario_id: Optional[int] = None
 
-from datetime import date
 
 class HistorialRentaResponse(BaseModel):
     id: int
-    renta_id: int
+    #renta_id: int
     fecha_inicio: date
     fecha_fin: date
     precio: int
@@ -97,8 +86,6 @@ class HistorialRentaResponse(BaseModel):
     class Config:
         from_attributes = True
 
-from pydantic import BaseModel
-from datetime import date
 
 class HistorialRentaCreate(BaseModel):
     renta_id: int
@@ -107,9 +94,6 @@ class HistorialRentaCreate(BaseModel):
     precio: float
 
 
-from typing import Optional
-from datetime import date
-from pydantic import BaseModel
 
 class HistorialRentaUpdate(BaseModel):
     fecha_inicio: Optional[date] = None
@@ -117,8 +101,6 @@ class HistorialRentaUpdate(BaseModel):
     precio: Optional[float] = None
 
 
-from pydantic import BaseModel
-from typing import Optional
 
 class ArrendatarioCreate(BaseModel):
     nombre: str
@@ -126,16 +108,6 @@ class ArrendatarioCreate(BaseModel):
     correo: str
     activo: bool
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-from pydantic import BaseModel
-from typing import Optional
->>>>>>> parent of 5564bcd (terminado)
-=======
-from pydantic import BaseModel
-from typing import Optional
->>>>>>> parent of 5564bcd (terminado)
 
 class ArrendatarioUpdate(BaseModel):
     nombre: Optional[str] = None

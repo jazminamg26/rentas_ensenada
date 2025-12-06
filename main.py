@@ -179,8 +179,6 @@ def crear_super_usuario_inicial():
 # -------------------------------------------------------
 # POST /rentas_inmuebles — Crear renta
 # -------------------------------------------------------
-<<<<<<< HEAD
-<<<<<<< HEAD
 @app.post("/rentas_inmuebles", tags=["Arrendatario"])
 def crear_renta(
     renta: RentaCreate,
@@ -193,18 +191,9 @@ def crear_renta(
         select(Arrendatario).where(Arrendatario.user_id == current_user.id)
     ).first()
     
-=======
-=======
->>>>>>> parent of 5564bcd (terminado)
-@app.post("/rentas/")
-def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
-    arrendatario = session.get(Arrendatario, renta.arrendatario_id)
->>>>>>> parent of 5564bcd (terminado)
     if not arrendatario:
         raise HTTPException(status_code=404, detail="Perfil de arrendatario no encontrado para este usuario.")
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     # 2. Validar baños (tu lógica existente)
     num_banos = renta.banos
     parte_decimal = num_banos % 1
@@ -219,36 +208,21 @@ def crear_renta(renta: RentaCreate, session: Session = Depends(get_session)):
         **renta.dict(),
         arrendatario_id=arrendatario.id  # <-- ID inferido del token
     )
-=======
-=======
->>>>>>> parent of 5564bcd (terminado)
-    nueva_renta = Renta(**renta.dict())
->>>>>>> parent of 5564bcd (terminado)
     session.add(nueva_renta)
     session.commit()
     session.refresh(nueva_renta)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     return {
         "mensaje": "La renta del inmueble se publicó existosamente",
         "renta_id": nueva_renta.id
     }
-=======
-=======
->>>>>>> parent of 5564bcd (terminado)
-    return {"mensaje": "La renta del inmueble se publicó existosamente", "renta_id": nueva_renta.id}
-
-
->>>>>>> parent of 5564bcd (terminado)
 # -------------------------------------------------------
 # GET /rentas_inmuebles — Obtener rentas con filtros
 # -------------------------------------------------------
 @app.get("/rentas_inmuebles", response_model=List[RentaInmueble])
 def obtener_rentas_inmuebles(
-    edificio: Optional[str] = None,
     habitaciones: Optional[int] = None,
-    banos: Optional[int] = None,
+    banos: Optional[float] = None,
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     mascotas: Optional[bool] = None,
@@ -261,8 +235,6 @@ def obtener_rentas_inmuebles(
 ):
     query = select(Renta)
 
-    if edificio is not None:
-        query = query.where(Renta.edificio == edificio)
     if habitaciones is not None:
         query = query.where(Renta.habitaciones >= habitaciones)
     if banos is not None:
@@ -282,7 +254,7 @@ def obtener_rentas_inmuebles(
     if disponible is not None:
         query = query.where(Renta.disponible == disponible)
     if precio is not None:
-        query = query.where(Renta.precio >= precio)
+        query = query.where(Renta.precio <= precio)
 
     return session.exec(query).all()
 
@@ -419,39 +391,19 @@ def crear_historial_renta(
     return {"mensaje": "Historial agregado exitosamente", "historial_id": nuevo_historial.id}
 
 # -------------------------------------------------------
-<<<<<<< HEAD
-<<<<<<< HEAD
 # PATCH /historial_renta/{id} — Actualizar historial (Solo Super User)
 # -------------------------------------------------------
 @app.patch("/historial_renta/{id}", tags=["Admin"], status_code=status.HTTP_200_OK)
-=======
-# 7️⃣ PATCH /historial_renta/{renta_id} — Actualizar historial
-# -------------------------------------------------------
-@app.patch("/historial_renta/{renta_id}")
->>>>>>> parent of 5564bcd (terminado)
-=======
-# 7️⃣ PATCH /historial_renta/{renta_id} — Actualizar historial
-# -------------------------------------------------------
-@app.patch("/historial_renta/{renta_id}")
->>>>>>> parent of 5564bcd (terminado)
 def actualizar_historial_renta(
-    renta_id: int,
+    id: int,
     datos: HistorialRentaUpdate,
     current_user: CurrentUser,                      # <-- Requerimos el usuario para verificar el rol
     session: Session = Depends(get_session)
-<<<<<<< HEAD
-<<<<<<< HEAD
 ) -> Dict[str, Any]:
     """
     Permite la actualización de un registro de historial de renta.
     Restringido únicamente al rol 'super_user'.
     """
-=======
-):
-    historial = session.get(HistorialRenta, renta_id)
-    if not historial:
-        raise HTTPException(status_code=404, detail="Inmueble no encontrado")
->>>>>>> parent of 5564bcd (terminado)
 
     # 1. Lógica de permisos por ROL
     # Solo se permite la ejecución si el rol es 'super_user'
@@ -463,12 +415,8 @@ def actualizar_historial_renta(
 
     # 2. Obtener el historial que se quiere modificar
     historial = session.get(HistorialRenta, id)
-=======
-):
-    historial = session.get(HistorialRenta, renta_id)
->>>>>>> parent of 5564bcd (terminado)
     if not historial:
-        raise HTTPException(status_code=404, detail="Inmueble no encontrado")
+        raise HTTPException(status_code=404, detail="Registro de historial no encontrado")
 
     # 3. Si todo está bien (y el usuario es super_user), aplicar cambios
     # Se eliminó la lógica de verificación de propiedad de arrendatario.
@@ -613,4 +561,3 @@ def login_for_access_token(
         expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
-
