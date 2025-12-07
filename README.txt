@@ -1,6 +1,3 @@
-# Resumen Esencial – API “Rentas Ensenada”
-
-API REST para gestionar **inmuebles en renta**, **arrendatarios**, **muebles** y **servicios**, construida con **FastAPI**, **SQLModel** y **JWT** para autenticación por roles (*super_user* y *arrendatario*).
 
 ## ⚙️ Instalación rápida
 ```bash
@@ -46,3 +43,4 @@ schemas.py – Validaciones Pydantic
 database.py – Conexión a la base de datos
 
 database.py – Conexión a la base de datos
+
