@@ -12,15 +12,11 @@ import unicodedata
 from datetime import datetime, timedelta
 import os
 from typing import List
-
 from sqlmodel import Session, select
-from sqlalchemy import text
+# --- Importación de SQLAlchemy necesaria para la conexión ---
+import sqlalchemy
+from sqlalchemy import text, create_engine
 
-# Configuración de Pandas
-pd.set_option('display.float_format', '{:.10f}'.format)
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36'
-}
 
 # --- 1. Catálogos en Memoria (Reemplazo de CSV) ---
 CATALOGOS = {
@@ -65,6 +61,9 @@ def quitar_acentos(texto):
 
 # --- 3. Función de Web Scraping (icasas) ---
 
+# NOTA: Asegúrate de que la variable 'headers' esté definida antes de llamar a icasas.
+# La definiremos en el bloque principal.
+
 def icasas(estado, tipo="renta"):
     if tipo == "venta":
         base_url = "https://www.icasas.mx/venta/habitacionales-casas-{}-2_5_3_0_11_0/t_departamentos/p_{}"
@@ -76,7 +75,8 @@ def icasas(estado, tipo="renta"):
     all_data = pd.DataFrame()
     for paginas in tqdm(range(1, 101), desc=f"Scrapeando icasas en {estado}"):
         url = base_url.format(estado, paginas)
-        r = requests.get(url, headers=headers)
+        # La variable 'headers' debe estar accesible globalmente o como parámetro
+        r = requests.get(url, headers=headers) 
         soup = BeautifulSoup(r.text, 'html.parser')
         resultados = soup.find_all('li', class_='serp-snippet ad featured')
         
@@ -109,7 +109,7 @@ def icasas(estado, tipo="renta"):
 
     return all_data
 
-# --- 4. Función de Simulación de Arrendatarios ---
+# --- 4. Función de Simulación de Arrendatarios (Sin cambios) ---
 
 def generar_arrendatarios(n=10):
     nombres = [
@@ -149,7 +149,7 @@ def generar_arrendatarios(n=10):
     return df[['id', 'nombre', 'telefono', 'correo', 'activo']]
 
 
-# --- 5. Función Principal de Generación (Reemplaza todos los pasos con CSV) ---
+# --- 5. Función Principal de Generación (Sin cambios funcionales mayores) ---
 
 def scrapear_y_simular(estado="baja-california-ensenada", tipo="renta", num_arrendatarios=85):
     
@@ -159,21 +159,15 @@ def scrapear_y_simular(estado="baja-california-ensenada", tipo="renta", num_arre
     vivi_renta = icasas(estado, tipo)
     
     # --- Limpieza de recamaras antes de la limpieza general ---
-    # 1. Extraer solo el número de la columna recamaras (si el scraper no lo hizo completamente)
     vivi_renta["recamaras"] = vivi_renta["recamaras"].astype(str).str.extract(r'(\d+)')
-    # 2. Convertir a numérico (entero, forzando NaN si falla)
-    vivi_renta["recamaras"] = pd.to_numeric(vivi_renta["recamaras"], errors="coerce").astype('Int64') # Int64 soporta NaN
+    vivi_renta["recamaras"] = pd.to_numeric(vivi_renta["recamaras"], errors="coerce").astype('Int64')
     # ---------------------------------------------------------
     
     vivi_limpia_renta = vivi_renta.copy()
     vivi_limpia_renta = vivi_limpia_renta[~vivi_limpia_renta["oferta"].str.contains("lote|terreno|renta")]
     vivi_limpia_renta = vivi_limpia_renta[vivi_limpia_renta['lat'].notna()]
-    vivi_limpia_renta = limpia_datos(vivi_limpia_renta) # Esta función también podría necesitar 'recamaras' como numérico
+    vivi_limpia_renta = limpia_datos(vivi_limpia_renta)
     vivi_limpia_renta['precio'] = vivi_limpia_renta['precio'].round(0).astype(int)
-
-
-
-
 
     # B. Generar Arrendatarios
     arrendatarios_df = generar_arrendatarios(n=num_arrendatarios)
@@ -183,7 +177,6 @@ def scrapear_y_simular(estado="baja-california-ensenada", tipo="renta", num_arre
     renta = vivi_limpia_renta.copy()
     renta['Edificio'] = np.random.choice(['Casa', 'Departamento'], size=len(renta))
     
-    # ESTA LÍNEA AHORA FUNCIONARÁ CORRECTAMENTE porque 'recamaras' es Int64
     renta['Banos'] = renta['recamaras'].apply(lambda x: 1 if x <= 2 else np.random.choice([1, 2]))
 
     renta['Mascotas'] = np.random.choice([True, False], size=len(renta))
@@ -273,118 +266,113 @@ def scrapear_y_simular(estado="baja-california-ensenada", tipo="renta", num_arre
     return {
         "arrendatarios": arrendatarios_df,
         "rentas": renta,
-        "historialrenta": historial_renta,
+        # Renombrar 'historialrenta' para la consistencia en el código
+        "historial_renta": historial_renta, 
         "renta_muebles": renta_muebles,
         "renta_servicios": renta_servicios,
         "catalogo_muebles": CATALOGOS['muebles'],
         "catalogo_servicios": CATALOGOS['servicios'],
     }
 
-# --- 6. Función de Llenado de Base de Datos sin Archivos CSV ---
 
-# NOTA: Las funciones 'truncate_tables' y 'create_users_from_arrendatarios' 
-# y los modelos/engine se asumen definidos y accesibles desde los archivos 'database.py', 'models.py', etc.
+# ==============================================================================
+# --- 6. Funcionalidad de Base de Datos ---
+# ==============================================================================
 
-def fill_database_no_csv(data_dfs):
-    """Función principal para llenar todas las tablas sin usar CSVs."""
-    
-    print("--- 🛠️ Iniciando carga masiva de datos a la BDD (sin CSV) ---")
+# ⚠️ CONFIGURACIÓN DE CONEXIÓN
+# Ajusta 'DB_USER', 'DB_HOST', y 'DB_PORT' si no usas los valores por defecto.
+DB_USER = "postgres" 
+DB_PASS = "Hey!Jaz26:)" # Contraseña proporcionada por el usuario
+DB_HOST = "localhost" 
+DB_PORT = "5432" 
+DB_NAME = "rentasInmuebles_ensenada"
 
-    # Mapeo de modelos a DataFrames generados
-    MODEL_MAP = {
-        Arrendatario: "arrendatarios",
-        Renta: "rentas",
-        HistorialRenta: "historialrenta",
-        RentaMuebles: "renta_muebles",
-        RentaServicios: "renta_servicios",
-        CatalogoMuebles: "catalogo_muebles",
-        CatalogoServicios: "catalogo_servicios",
-    }
-    
-    # Simulación de mapeo (necesitas implementar la conexión real)
-    engine = None # Reemplazar con tu motor de SQLModel/SQLAlchemy
-    if engine is None:
-        print("❌ Error: El motor de la base de datos (engine) no está definido. Deteniendo la carga a la BDD.")
-        return
+# Cadena de conexión de PostgreSQL con driver psycopg2
+DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
+
+def insertar_a_postgres(df: pd.DataFrame, table_name: str, engine: sqlalchemy.engine.Engine):
+    """Inserta un DataFrame en una tabla de PostgreSQL y resetea la secuencia SERIAL."""
+    print(f"-> Insertando datos en la tabla '{table_name}'...")
     try:
-        with Session(engine) as session:
-            
-            # --- LLAMADA A LA FUNCIÓN DE VACIADO (Asume que está definida) ---
-            # truncate_tables(session)
-            print("Función truncate_tables() omitida por falta de 'engine'.")
-            # ----------------------------------------------------------------
+        # Usamos if_exists='append' para agregar datos a las tablas existentes.
+        # ADVERTENCIA: Si deseas borrar los datos anteriores, usa if_exists='replace'.
+        df.to_sql(
+            table_name,
+            engine,
+            if_exists='append', 
+            index=False,
+            chunksize=1000,
+            method='multi'
+        )
+        
+        # Después de la inserción, es crucial resetear la secuencia SERIAL
+        # de PostgreSQL para que los nuevos registros (ej: los insertados desde pgAdmin) 
+        # no colisionen con los IDs insertados masivamente.
+        with engine.begin() as connection:
+            # Obtiene el ID máximo de la tabla y ajusta la secuencia (solo si la tabla tiene columna 'id')
+            if 'id' in df.columns:
+                 # El nombre de la secuencia en PostgreSQL suele ser 'nombretabla_nombrecolumna_seq'
+                sequence_name = f"{table_name}_id_seq"
+                # Esta sentencia ajusta el próximo valor de la secuencia al valor máximo + 1
+                connection.execute(text(f"SELECT setval('{sequence_name}', (SELECT COALESCE(MAX(id), 1) FROM {table_name}), true);"))
 
-            # 1. Cargar Catálogos
-            print("Cargando Catálogos...")
-            for model, key in [(CatalogoMuebles, "catalogo_muebles"), (CatalogoServicios, "catalogo_servicios")]:
-                df = data_dfs[key].copy().drop(columns=['id'], errors='ignore')
-                data = df.to_dict('records')
-                session.add_all([model(**item) for item in data])
-                print(f"✅ Catálogo '{model.__name__}' cargado.")
-
-            # 2. Crear Users y Arrendatarios (Dependencia de User)
-            print("Creando usuarios y preparando arrendatarios...")
-            df_arrendatarios = data_dfs["arrendatarios"].copy()
-            # Esta función DEBE crear los Users y modificar el DF con el 'user_id' de la BDD.
-            # df_arrendatarios_for_db = create_users_from_arrendatarios(df_arrendatarios, session)
-            print("Función create_users_from_arrendatarios() omitida por falta de 'get_password_hash'.")
-            
-            # **NOTA**: Por la omisión de la función, se salta la carga de Arrendatarios y Users 
-            # para evitar errores, pero en tu código real DEBERÍAS insertarlos aquí.
-
-            # Asumiremos que los IDs de arrendatario siguen siendo correctos para la siguiente tabla.
-            df_rentas_original = data_dfs["rentas"].copy()
-            renta_ids_csv = df_rentas_original['id'].tolist()
-            
-            # 3. Cargar Rentas
-            print("Cargando Rentas...")
-            df_rentas = df_rentas_original.copy().drop(columns=['id'], errors='ignore')
-            data_rentas = df_rentas.to_dict('records')
-            session.add_all([Renta(**item) for item in data_rentas])
-            session.commit()
-            print("✅ Rentas cargadas correctamente.")
-            
-            # Obtener el mapeo de IDs de Renta reales (CSV_ID -> DB_ID)
-            # Esto asume que no hubo omisiones o reordenamientos en la BDD.
-            renta_ids_db = session.exec(select(Renta.id)).all()
-            id_map = {csv_id: db_id for csv_id, db_id in zip(renta_ids_csv, renta_ids_db)}
-            
-            # 4. Cargar Historial de Rentas
-            print("Cargando Historial de Rentas...")
-            df_historial = data_dfs["historialrenta"].copy().drop(columns=['id'], errors='ignore')
-            df_historial['renta_id'] = df_historial['renta_id'].map(id_map)
-            df_historial['fecha_inicio'] = pd.to_datetime(df_historial['fecha_inicio']).dt.date
-            df_historial['fecha_fin'] = pd.to_datetime(df_historial['fecha_fin']).dt.date
-            data_historial = df_historial.to_dict('records')
-            session.add_all([HistorialRenta(**item) for item in data_historial])
-            print("✅ Historial de Rentas cargado.")
-
-            # 5. Cargar Renta Muebles y Renta Servicios
-            print("Cargando tablas de enlace...")
-            for model, key in [(RentaMuebles, "renta_muebles"), (RentaServicios, "renta_servicios")]:
-                df = data_dfs[key].copy().drop(columns=['id'], errors='ignore')
-                df['renta_id'] = df['renta_id'].map(id_map)
-                data = df.to_dict('records')
-                session.add_all([model(**item) for item in data])
-                print(f"✅ Tabla de enlace '{model.__name__}' cargada.")
-
-            session.commit()
-            print("\n🎉 Todos los datos han sido cargados exitosamente sin usar CSVs.")
+        print(f"   ✅ {len(df)} filas insertadas en '{table_name}'.")
 
     except Exception as e:
-        print(f"\nFATAL ERROR durante la carga de datos a la BDD: {e}")
+        print(f"   ❌ Error al insertar en '{table_name}': {e}")
+        print(f"   Revisa que el esquema de la tabla '{table_name}' coincida y que las claves foráneas existan.")
 
-# --- Ejecución Principal (Demostración) ---
-if __name__ == "__main__":
+
+# ==============================================================================
+# --- Bloque de Ejecución Principal ---
+# ==============================================================================
+
+if __name__ == '__main__':
+    # 🚨 Importante: Definir los headers para el Web Scraping
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+
+    # 1. Generar todos los datos
+    try:
+        datos_generados = scrapear_y_simular(estado="baja-california-ensenada", tipo="renta", num_arrendatarios=85)
+    except Exception as e:
+        print(f"\n❌ Hubo un error al generar los datos (posiblemente en el web scraping). Deteniendo la ejecución. Error: {e}")
+        exit()
+
+    # 2. Conectar a la base de datos
+    print("\n🔗 Conectando a la base de datos...")
+    try:
+        # Crea el motor de conexión
+        engine = create_engine(DATABASE_URL)
+        # Prueba la conexión
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+            print("   Conexión exitosa a PostgreSQL.")
+    except Exception as e:
+        print(f"   ❌ Fallo la conexión a PostgreSQL. Revisa tus credenciales, host, puerto y que la base de datos exista. Error: {e}")
+        exit()
+
+    # 3. Insertar datos en ORDEN para respetar las claves foráneas (FK)
+
+    print("\n📦 Comenzando la inserción en la base de datos...")
+
+    # A. Catálogos (Sin FK)
+    insertar_a_postgres(datos_generados['catalogo_muebles'], 'catalogo_muebles', engine)
+    insertar_a_postgres(datos_generados['catalogo_servicios'], 'catalogo_servicios', engine)
+
+    # B. Maestras (Sin FK o con FK a una tabla ya insertada)
+    insertar_a_postgres(datos_generados['arrendatarios'], 'arrendatarios', engine)
+
+    # C. Rentas (FK a arrendatarios)
+    insertar_a_postgres(datos_generados['rentas'], 'rentas', engine)
+
+    # D. Tablas de Relación (FK a rentas, catálogos)
+    insertar_a_postgres(datos_generados['renta_muebles'], 'renta_muebles', engine)
+    insertar_a_postgres(datos_generados['renta_servicios'], 'renta_servicios', engine)
+
+    # E. Historial (FK a rentas)
+    insertar_a_postgres(datos_generados['historial_renta'], 'historial_renta', engine)
     
-    # 1. Generar todos los datos en DataFrames en memoria
-    datos_generados = scrapear_y_simular()
-    
-    # 2. Opcional: Imprimir un ejemplo
-    # print("\nEjemplo de Renta generada:")
-    # print(datos_generados['rentas'].head())
-    
-    # 3. Cargar los datos a la Base de Datos (requiere que 'engine' esté configurado)
-    # fill_database_no_csv(datos_generados) # Descomenta para ejecutar la carga real a la BDD
-    print("\nLa función fill_database_no_csv ha sido omitida en la ejecución final por las dependencias de BDD.")
+    print("\n🎉 Proceso de inserción de datos completado exitosamente.")
